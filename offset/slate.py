@@ -1,19 +1,23 @@
-"""Custom image slate storage, stream-matched FLV compilation, and exact A/V loop cursor."""
+"""Custom image slate storage, ingest-matched FLV compilation, and exact A/V loop cursor."""
 from dataclasses import dataclass
 from fractions import Fraction
 import json
 import math
 from pathlib import Path
-import shutil
 import statistics
 import subprocess
 import tempfile
 import time
 
 from .media import FLV_HEADER, Tag, read_tags
+from .paths import data_root, resolve_binary
 
 MAX_SLATE_IMAGE_BYTES = 10 * 1024 * 1024
 COMMON_FPS = (24, 25, 30, 48, 50, 60)
+SAFE_COLORSPACES = {"bt709", "bt470bg", "smpte170m"}
+SAFE_PRIMARIES = {"bt709", "bt470bg", "smpte170m"}
+SAFE_TRANSFERS = {"bt709", "smpte170m", "iec61966-2-1"}
+SAFE_RANGES = {"tv", "pc"}
 
 
 def detect_image_extension(data):
@@ -36,7 +40,7 @@ def mime_for_extension(ext):
 class SlateStore:
     """Persists the streamer's custom slate image locally."""
     def __init__(self, directory=None):
-        root = Path(directory) if directory else Path(__file__).resolve().parent.parent / "data" / "slate"
+        root = Path(directory) if directory else data_root() / "slate"
         self.directory = root
         self.meta_path = root / "slate.json"
 
@@ -111,6 +115,25 @@ class StreamFormat:
     sample_rate: int
     channels: int
     profile: str = "high"
+    level: str = "4.1"
+    color_space: str = "bt709"
+    color_primaries: str = "bt709"
+    color_transfer: str = "bt709"
+    color_range: str = "tv"
+
+
+def _format_level(raw_level, width, height, fps):
+    try:
+        num = int(raw_level)
+        if 30 <= num <= 52:
+            return f"{num // 10}.{num % 10}"
+    except (TypeError, ValueError):
+        pass
+    if width >= 1920 and fps >= 50:
+        return "4.2"
+    if width >= 1920:
+        return "4.1"
+    return "3.1"
 
 
 def estimate_fps(video_dts_samples, fallback=30):
@@ -128,16 +151,18 @@ def estimate_fps(video_dts_samples, fallback=30):
 
 def probe_stream_format(avc_header, aac_header, first_idr, sample_rate, channels,
                         video_dts_samples=(), ffmpeg="ffmpeg"):
-    """Inspect width/height/profile from the live OBS stream headers + first IDR."""
-    ffprobe = shutil.which("ffprobe")
-    if not ffprobe:
-        ff_path = shutil.which(ffmpeg)
-        if ff_path:
-            candidate = Path(ff_path).with_name("ffprobe.exe" if Path(ff_path).suffix.lower() == ".exe" else "ffprobe")
-            if candidate.is_file():
-                ffprobe = str(candidate)
+    """Inspect width/height/profile/level/colorimetry from live OBS stream headers + first IDR."""
+    ffprobe = resolve_binary("ffprobe")
+    if ffprobe == "ffprobe" and ffmpeg != "ffmpeg":
+        candidate = Path(ffmpeg).with_name("ffprobe.exe" if Path(ffmpeg).suffix.lower() == ".exe" else "ffprobe")
+        if candidate.is_file():
+            ffprobe = str(candidate)
+
     width, height, profile = 1280, 720, "high"
+    raw_level = None
+    color_space, color_primaries, color_transfer, color_range = "bt709", "bt709", "bt709", "tv"
     fps = estimate_fps(video_dts_samples, fallback=30)
+
     if ffprobe and avc_header and aac_header and first_idr:
         try:
             with tempfile.TemporaryDirectory(prefix="offset-probe-") as tmp:
@@ -148,7 +173,8 @@ def probe_stream_format(avc_header, aac_header, first_idr, sample_rate, channels
                 sample.write_bytes(raw)
                 proc = subprocess.run(
                     [ffprobe, "-v", "error", "-select_streams", "v:0",
-                     "-show_entries", "stream=width,height,profile,r_frame_rate",
+                     "-show_entries",
+                     "stream=width,height,profile,level,r_frame_rate,color_space,color_primaries,color_transfer,color_range",
                      "-of", "json", str(sample)],
                     capture_output=True, timeout=5,
                 )
@@ -167,6 +193,19 @@ def probe_stream_format(avc_header, aac_header, first_idr, sample_rate, channels
                             profile = "main"
                         else:
                             profile = "high"
+                        raw_level = s.get("level")
+                        cs = str(s.get("color_space") or "").lower()
+                        cp = str(s.get("color_primaries") or "").lower()
+                        ct = str(s.get("color_transfer") or "").lower()
+                        cr = str(s.get("color_range") or "").lower()
+                        if cs in SAFE_COLORSPACES:
+                            color_space = cs
+                        if cp in SAFE_PRIMARIES:
+                            color_primaries = cp
+                        if ct in SAFE_TRANSFERS:
+                            color_transfer = ct
+                        if cr in SAFE_RANGES:
+                            color_range = cr
                         if len(video_dts_samples) < 4 and "/" in str(s.get("r_frame_rate", "")):
                             num, den = str(s["r_frame_rate"]).split("/", 1)
                             if int(den) > 0 and 15 <= int(num) / int(den) <= 60:
@@ -180,6 +219,11 @@ def probe_stream_format(avc_header, aac_header, first_idr, sample_rate, channels
         sample_rate=sample_rate or 48000,
         channels=channels or 2,
         profile=profile,
+        level=_format_level(raw_level, width, height, fps),
+        color_space=color_space,
+        color_primaries=color_primaries,
+        color_transfer=color_transfer,
+        color_range=color_range,
     )
 
 
@@ -202,22 +246,23 @@ class CompiledSlate:
 
 
 def compile_slate(fmt, image_path=None, ffmpeg="ffmpeg", duration_s=2):
-    """Compile the streamer's custom image (or clean default slate) into a loopable FLV."""
+    """Compile custom image (or dark default slate) matching OBS H.264 level, colorimetry & AUD."""
     w, h, fps = fmt.width, fmt.height, fmt.fps
     sr, ch = fmt.sample_rate, fmt.channels
     cl = "stereo" if ch == 2 else "mono"
     gop = max(fps, int(fps * duration_s))
     use_custom = image_path is not None and Path(image_path).is_file()
+    ff = resolve_binary(ffmpeg)
 
     with tempfile.TemporaryDirectory(prefix="offset-slate-") as tmp:
         out_flv = Path(tmp) / "slate.flv"
-        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
+        cmd = [ff, "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
         if use_custom:
             cmd += ["-loop", "1", "-framerate", str(fps), "-i", str(image_path)]
             vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=#0b0f17,setsar=1,format=yuv420p")
+                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=#0a0a0c,setsar=1,format=yuv420p")
         else:
-            cmd += ["-f", "lavfi", "-i", f"color=c=#0f172a:s={w}x{h}:r={fps}"]
+            cmd += ["-f", "lavfi", "-i", f"color=c=#0a0a0c:s={w}x{h}:r={fps}"]
             vf = "format=yuv420p"
         cmd += [
             "-f", "lavfi", "-i", f"anullsrc=r={sr}:cl={cl}",
@@ -225,7 +270,10 @@ def compile_slate(fmt, image_path=None, ffmpeg="ffmpeg", duration_s=2):
             "-vf", vf,
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage",
-            "-profile:v", fmt.profile, "-pix_fmt", "yuv420p",
+            "-profile:v", fmt.profile, "-level:v", fmt.level, "-pix_fmt", "yuv420p",
+            "-colorspace", fmt.color_space, "-color_primaries", fmt.color_primaries,
+            "-color_trc", fmt.color_transfer, "-color_range", fmt.color_range,
+            "-x264-params", "aud=1:repeat-headers=1",
             "-bf", "0", "-g", str(gop), "-keyint_min", str(gop), "-sc_threshold", "0",
             "-b:v", "800k", "-maxrate", "1500k", "-bufsize", "1500k",
             "-c:a", "aac", "-b:a", "128k", "-ar", str(sr), "-ac", str(ch),
@@ -280,11 +328,7 @@ class SlateCursor:
         return int(round(min(self.v_exact, self.a_exact)))
 
     def next_packet(self, *, max_audio_end_ms=None):
-        """Return (out_ts_ms, Tag) in strictly non-decreasing FLV timestamp order.
-
-        If max_audio_end_ms is provided, refuses to emit an AAC frame whose end
-        timestamp would overlap max_audio_end_ms (SPEC §6.1 regression guarantee).
-        """
+        """Return (out_ts_ms, Tag) in strictly non-decreasing FLV timestamp order."""
         v_due = self.v_exact
         a_due = self.a_exact
         audio_allowed = max_audio_end_ms is None or (a_due + self.a_step <= Fraction(max_audio_end_ms))

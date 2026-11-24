@@ -23,6 +23,7 @@ from . import __version__
 from .buffer import PacketBuffer, Pacer
 from .destinations import local_rtmp, mask_rtmp_url, validate_output_rtmp
 from .media import FLV_HEADER, Validator, read_tags, tag_has_idr
+from .paths import resolve_binary
 from .slate import SlateCursor, SlateStore, compile_slate, probe_stream_format
 
 
@@ -62,8 +63,9 @@ class Config:
         in_url, out_url = urlsplit(self.input_url), urlsplit(self.output_url)
         if out_url.hostname in ("127.0.0.1", "localhost") and in_url.port == out_url.port:
             raise ValueError("Entrada y destino deben usar puertos distintos.")
-        if not shutil.which(self.ffmpeg):
-            raise ValueError("FFmpeg no está en PATH. Instálalo antes de iniciar.")
+        ff_bin = resolve_binary(self.ffmpeg)
+        if not (Path(ff_bin).is_file() or shutil.which(ff_bin)):
+            raise ValueError("FFmpeg no está en PATH ni junto a Offset. Instálalo antes de iniciar.")
         if not 1 <= self.stall_timeout <= 60:
             raise ValueError("Timeout inválido.")
         if not 2 <= self.reconnect_timeout <= 300:
@@ -237,6 +239,8 @@ class Relay:
         self._input_reconnect_timed_out = False
         self._output_reconnecting = False
         self._epoch_boundaries = {}  # shifted_idr_ts -> {9: avc_header, 8: aac_header}
+        self._ingress_wait_idr = False
+        self._splice_idrs = set()  # shifted_idr_ts requiring clean timestamp rebase after purge
 
         # Background slate preparation
         self._stream_fmt = None
@@ -320,7 +324,7 @@ class Relay:
 
     def input_command(self, rw_timeout_s=None):
         timeout = self.config.stall_timeout if rw_timeout_s is None else rw_timeout_s
-        return [self.config.ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostdin",
+        return [resolve_binary(self.config.ffmpeg), "-hide_banner", "-loglevel", "warning", "-nostdin",
                 "-rw_timeout", str(int(timeout * 1e6)),
                 "-listen", "1", "-probesize", "32768", "-analyzeduration", "500000",
                 "-i", self.config.input_url, "-map", "0:v:0", "-map", "0:a:0",
@@ -329,7 +333,7 @@ class Relay:
                 "-flvflags", "no_duration_filesize", "-f", "flv", "pipe:1"]
 
     def output_command(self):
-        return [self.config.ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostdin",
+        return [resolve_binary(self.config.ffmpeg), "-hide_banner", "-loglevel", "warning", "-nostdin",
                 "-probesize", "32768", "-analyzeduration", "500000", "-f", "flv",
                 "-i", "pipe:0", "-map", "0:v:0", "-map", "0:a:0", "-c", "copy",
                 "-copyts", "-avoid_negative_ts", "disabled", "-flush_packets", "1",
@@ -581,6 +585,8 @@ class Relay:
             )
         with self.lock:
             self.purged_packets += purged_pkts
+            # Discard incoming orphaned tail frames until OBS sends the next clean IDR.
+            self._ingress_wait_idr = True
             self.last_purge = {
                 "at": time.strftime("%H:%M:%S"),
                 "requested_s": seconds,
@@ -675,6 +681,16 @@ class Relay:
                             out_tag = tag if epoch_ts_shift_ms == 0 else tag.with_timestamp(shifted_ts)
                             highest_ts_ms = max(highest_ts_ms, shifted_ts)
                             epoch_had_media = True
+
+                            with self.lock:
+                                wait_idr = self._ingress_wait_idr
+                            if wait_idr:
+                                if epoch_validator.last_is_idr:
+                                    with self.lock:
+                                        self._ingress_wait_idr = False
+                                        self._splice_idrs.add(shifted_ts)
+                                else:
+                                    continue
 
                             if not epoch_boundary_recorded and epoch_validator.ready:
                                 with self.lock:
@@ -1218,10 +1234,13 @@ class Relay:
                     self.stop_event.wait(0.01)
                     continue
 
-                # 3. Handle new input epoch headers transparently when OBS reconnected
+                # 3. Handle new input epoch headers or post-purge clean IDR splice
                 with self.lock:
                     epoch_hdrs = self._epoch_boundaries.pop(tag.timestamp, None)
-                if epoch_hdrs is not None and stream is not None:
+                    is_purge_splice = tag.timestamp in self._splice_idrs
+                    if is_purge_splice:
+                        self._splice_idrs.discard(tag.timestamp)
+                if (epoch_hdrs is not None or is_purge_splice) and stream is not None:
                     resume_out_ts = safe_next_out_ts(tag.timestamp)
                     if not emit_obs_headers(stream, resume_out_ts, custom_headers=epoch_hdrs):
                         break

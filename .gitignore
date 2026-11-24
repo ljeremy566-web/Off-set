@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 offset-demo-*.flv
 data/
+dist/
+build/
+*.spec

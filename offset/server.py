@@ -10,10 +10,11 @@ from urllib.parse import urlsplit
 
 from .destinations import build_output_url, list_presets, mask_rtmp_url
 from .hotkeys import HotkeyManager
+from .paths import app_root
 from .relay import Config, Relay
 from .slate import MAX_SLATE_IMAGE_BYTES, SlateStore
 
-WEB = Path(__file__).resolve().parent.parent / "web"
+WEB = app_root() / "web"
 TERMINAL = {"FINISHED", "STOPPED", "FAULT"}
 
 

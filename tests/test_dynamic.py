@@ -13,7 +13,9 @@ from urllib.request import Request, urlopen
 from offset.buffer import PacketBuffer, Pacer
 from offset.destinations import build_output_url, mask_rtmp_url, validate_output_rtmp
 from offset.hotkeys import parse_hotkey
+from offset.icon import build_ico_bytes
 from offset.media import Tag, Validator, tag_has_idr
+from offset.paths import resolve_binary
 from offset.relay import Config, process_stats
 from offset.server import make_server
 from offset.settings import SettingsStore
@@ -236,6 +238,12 @@ class DynamicCoreTests(unittest.TestCase):
                 self.assertNotIn(secret, raw_json)
                 self.assertEqual(store.load_encrypted_key("twitch"), secret)
                 self.assertIn("twitch", store.saved_key_presets())
+
+    def test_icon_ico_generation_and_binary_resolution(self):
+        ico = build_ico_bytes(sizes=(16, 32))
+        self.assertEqual(ico[:4], b"\x00\x00\x01\x00")
+        self.assertGreater(len(ico), 150)
+        self.assertTrue(resolve_binary("ffmpeg"))
 
 
 if __name__ == "__main__":

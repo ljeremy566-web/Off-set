@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+from .paths import data_root
+
 
 def _dpapi_protect(plaintext: str) -> str:
     if not plaintext:
@@ -60,7 +62,7 @@ class SettingsStore:
     """Persists streamer preferences safely in data/settings.json."""
 
     def __init__(self, path=None):
-        self.path = Path(path) if path else Path(__file__).resolve().parent.parent / "data" / "settings.json"
+        self.path = Path(path) if path else data_root() / "settings.json"
 
     def load(self) -> dict:
         if not self.path.is_file():
