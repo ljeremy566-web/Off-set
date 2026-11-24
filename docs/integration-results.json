@@ -1,0 +1,23 @@
+{
+  "file_delay": {
+    "packets": 309,
+    "payloads_identical": true,
+    "common_timestamp_offset_s": 0.0,
+    "decode_errors": 0,
+    "minimum_residence_s": 0.4001305689998844,
+    "buffer_peak_bytes": 14246
+  },
+  "bframes_normal": "PTS distinto de DTS: configura B-frames = 0.",
+  "bframes_zero_cts": "B-frames detectados en H.264. Configura bf=0.",
+  "capacity": "FAULT antes de enviar; límite respetado",
+  "rtmp": {
+    "packets": 309,
+    "payloads_identical": true,
+    "common_timestamp_offset_s": 0.0,
+    "decode_errors": 0,
+    "minimum_residence_s": 1.0011203169997316,
+    "rss_peak_bytes_motor_and_transports": null
+  },
+  "destination_missing": "FAULT sin cuelgue",
+  "destination_disconnect": "FAULT durante transmisión activa, sin reconexión ni salto"
+}

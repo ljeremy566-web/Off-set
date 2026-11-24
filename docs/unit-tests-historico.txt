@@ -1,0 +1,21 @@
+test_byte_cap_does_not_drop_unread_content (test_core.BufferTests.test_byte_cap_does_not_drop_unread_content) ... ok
+test_duration_and_packet_caps (test_core.BufferTests.test_duration_and_packet_caps) ... ok
+test_residence_floor (test_core.BufferTests.test_residence_floor) ... ok
+test_scheduler_jitter_does_not_accumulate (test_core.BufferTests.test_scheduler_jitter_does_not_accumulate) ... ok
+test_stall_reanchors_without_catchup (test_core.BufferTests.test_stall_reanchors_without_catchup) ... ok
+test_http_origin_token_and_static (test_core.ControlTests.test_http_origin_token_and_static) ... ok
+test_invalid_config (test_core.ControlTests.test_invalid_config) ... ok
+test_only_explicit_loopback_rtmp (test_core.ControlTests.test_only_explicit_loopback_rtmp) ... ok
+test_cts_and_slice_validation_are_separate (test_core.MediaTests.test_cts_and_slice_validation_are_separate) ... ok
+test_first_picture_must_be_idr (test_core.MediaTests.test_first_picture_must_be_idr) ... ok
+test_flv_round_trip (test_core.MediaTests.test_flv_round_trip) ... ok
+test_headers_cannot_change (test_core.MediaTests.test_headers_cannot_change) ... ok
+test_monotonic_and_global_order (test_core.MediaTests.test_monotonic_and_global_order) ... ok
+test_truncated_and_oversized_rejected (test_core.MediaTests.test_truncated_and_oversized_rejected) ... ok
+test_valid_idr_and_audio (test_core.MediaTests.test_valid_idr_and_audio) ... ok
+test_zero_cts_does_not_hide_b_slice (test_core.MediaTests.test_zero_cts_does_not_hide_b_slice) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.510s
+
+OK

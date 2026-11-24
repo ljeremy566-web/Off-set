@@ -1,0 +1,43 @@
+test_byte_cap_does_not_drop_unread_content (test_core.BufferTests.test_byte_cap_does_not_drop_unread_content) ... ok
+test_duration_and_packet_caps (test_core.BufferTests.test_duration_and_packet_caps) ... ok
+test_residence_floor (test_core.BufferTests.test_residence_floor) ... ok
+test_scheduler_jitter_does_not_accumulate (test_core.BufferTests.test_scheduler_jitter_does_not_accumulate) ... ok
+test_stall_reanchors_without_catchup (test_core.BufferTests.test_stall_reanchors_without_catchup) ... ok
+test_http_origin_token_and_static (test_core.ControlTests.test_http_origin_token_and_static) ... ok
+test_invalid_config (test_core.ControlTests.test_invalid_config) ... ok
+test_only_explicit_loopback_rtmp (test_core.ControlTests.test_only_explicit_loopback_rtmp) ... ok
+test_cts_and_slice_validation_are_separate (test_core.MediaTests.test_cts_and_slice_validation_are_separate) ... ok
+test_first_picture_must_be_idr (test_core.MediaTests.test_first_picture_must_be_idr) ... ok
+test_flv_round_trip (test_core.MediaTests.test_flv_round_trip) ... ok
+test_headers_cannot_change (test_core.MediaTests.test_headers_cannot_change) ... ok
+test_monotonic_and_global_order (test_core.MediaTests.test_monotonic_and_global_order) ... ok
+test_truncated_and_oversized_rejected (test_core.MediaTests.test_truncated_and_oversized_rejected) ... ok
+test_valid_idr_and_audio (test_core.MediaTests.test_valid_idr_and_audio) ... ok
+test_zero_cts_does_not_hide_b_slice (test_core.MediaTests.test_zero_cts_does_not_hide_b_slice) ... ok
+test_audit_close_error_is_not_reported_as_success (test_lifecycle.LifecycleTests.test_audit_close_error_is_not_reported_as_success) ... ok
+test_busy_shutdown_is_http_409_and_does_not_start_new_relay (test_lifecycle.LifecycleTests.test_busy_shutdown_is_http_409_and_does_not_start_new_relay) ... ok
+test_clean_input_close_error_does_not_abort_pending_drain (test_lifecycle.LifecycleTests.test_clean_input_close_error_does_not_abort_pending_drain) ... ok
+test_cleanup_of_finished_session_preserves_success (test_lifecycle.LifecycleTests.test_cleanup_of_finished_session_preserves_success) ... ok
+test_closed_queue_does_not_count_rejected_input (test_lifecycle.LifecycleTests.test_closed_queue_does_not_count_rejected_input) ... ok
+test_completed_stop_is_not_overwritten_by_late_failure (test_lifecycle.LifecycleTests.test_completed_stop_is_not_overwritten_by_late_failure) ... ok
+test_early_wait_wakeup_does_not_dispatch_before_deadline (test_lifecycle.LifecycleTests.test_early_wait_wakeup_does_not_dispatch_before_deadline) ... ok
+test_input_close_error_still_signals_ingress_done (test_lifecycle.LifecycleTests.test_input_close_error_still_signals_ingress_done) ... ok
+test_new_session_is_refused_until_previous_workers_exit (test_lifecycle.LifecycleTests.test_new_session_is_refused_until_previous_workers_exit) ... ok
+test_python_310_is_rejected_before_starting_transports (test_lifecycle.LifecycleTests.test_python_310_is_rejected_before_starting_transports) ... ok
+test_spawn_in_progress_is_published_before_stop_can_finish (test_lifecycle.LifecycleTests.test_spawn_in_progress_is_published_before_stop_can_finish) ... ok
+test_status_is_readable_while_controller_waits_for_stop (test_lifecycle.LifecycleTests.test_status_is_readable_while_controller_waits_for_stop) ... ok
+test_stop_does_not_complete_or_discard_while_writer_is_alive (test_lifecycle.LifecycleTests.test_stop_does_not_complete_or_discard_while_writer_is_alive) ... ok
+test_stopped_session_cannot_return_to_buffering (test_lifecycle.LifecycleTests.test_stopped_session_cannot_return_to_buffering) ... ok
+test_unresponsive_process_returns_pending_without_raising (test_lifecycle.LifecycleTests.test_unresponsive_process_returns_pending_without_raising) ... ok
+test_watchdog_result_after_user_stop_does_not_create_fault (test_lifecycle.LifecycleTests.test_watchdog_result_after_user_stop_does_not_create_fault) ... ok
+test_worker_start_failure_can_be_cleaned_up (test_lifecycle.LifecycleTests.test_worker_start_failure_can_be_cleaned_up) ... ok
+test_write_and_close_errors_still_release_queue_and_signal_done (test_lifecycle.LifecycleTests.test_write_and_close_errors_still_release_queue_and_signal_done) ... ok
+test_wait_preserves_deadline_and_obeys_cancel (test_shutdown_qa.DeadlineRegression.test_wait_preserves_deadline_and_obeys_cancel) ... ok
+test_failure_before_worker_start_releases_payloads (test_shutdown_qa.ShutdownRegression.test_failure_before_worker_start_releases_payloads) ... ok
+test_normal_eof_preserves_queue_for_drain (test_shutdown_qa.ShutdownRegression.test_normal_eof_preserves_queue_for_drain) ... ok
+test_stop_releases_pending_payloads (test_shutdown_qa.ShutdownRegression.test_stop_releases_pending_payloads) ... ok
+
+----------------------------------------------------------------------
+Ran 38 tests in 1.429s
+
+OK

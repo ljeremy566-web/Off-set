@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="offset-token" content="__TOKEN__">
+  <title>Offset · Control de Delay</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+<div class="aurora-bg" aria-hidden="true">
+  <span class="aurora-orb orb-1"></span>
+  <span class="aurora-orb orb-2"></span>
+  <span class="aurora-orb orb-3"></span>
+</div>
+<div class="app-shell">
+  <!-- COMPACT HARDWARE-STYLE STREAMER DECK (same clean core for desktop & ?dock=1) -->
+  <section class="deck" aria-label="Control de directo Offset">
+    <!-- Top Status Bar (Meld / Audio Mixer style) -->
+    <header class="deck-header">
+      <div class="deck-brand">
+        <span class="brand-mark" aria-hidden="true">o.</span>
+        <div class="status-cluster">
+          <div class="status-line">
+            <span id="live-dot" class="led" aria-hidden="true"></span>
+            <span id="status-pill" class="status-text" role="status">Sin conectar</span>
+          </div>
+          <span id="stream-meta" class="meta-sub">Listo para OBS</span>
+        </div>
+      </div>
+
+      <div class="deck-header-right">
+        <span id="live-clock" class="mono-clock" aria-label="Delay actual">0.0s</span>
+        <button type="button" id="btn-open-settings" class="icon-btn" aria-label="Abrir ajustes y configuración" title="Ajustes">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Alerts / Dynamic Context Banners (strictly hidden unless active) -->
+    <div id="connection-error" class="banner banner-danger" role="alert" hidden>
+      Motor local desconectado. Comprueba que Offset siga abierto.
+    </div>
+    <div id="fault" class="banner banner-danger" role="alert" hidden></div>
+    <div id="action-error" class="banner banner-danger" role="alert" hidden></div>
+
+    <div id="reconnect-banner" class="banner banner-warn" hidden>
+      <strong>OBS desconectado — directo a salvo</strong>
+      <span>Mostrando tu imagen de espera hasta que OBS vuelva a conectar…</span>
+    </div>
+
+    <div id="slate-progress-wrap" class="banner banner-slate" hidden>
+      <div class="progress-head">
+        <span id="slate-progress-label">Cargando delay con tu imagen (0 frames perdidos)</span>
+        <strong id="slate-progress-pct" class="mono">0%</strong>
+      </div>
+      <div class="progress-track"><div id="slate-progress-bar" class="progress-fill"></div></div>
+    </div>
+
+    <div id="catchup-banner" class="banner banner-info" hidden>
+      <div class="banner-row">
+        <div>
+          <strong>Volviendo a directo sin perder nada</strong>
+          <span id="catchup-eta-text">Calculando…</span>
+        </div>
+        <button type="button" id="btn-jump-from-catchup" class="mini-btn">Saltar ya</button>
+      </div>
+    </div>
+
+    <div id="panic-banner" class="banner banner-panic" hidden>
+      <div class="banner-row">
+        <div>
+          <strong>Directo oculto</strong>
+          <span>Tu audiencia solo ve la imagen de espera.</span>
+        </div>
+        <div class="banner-actions">
+          <button type="button" id="btn-panic-resume-live" class="mini-btn mini-live">Volver en directo</button>
+          <button type="button" id="btn-panic-resume-buf" class="mini-btn">Seguir con delay</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRIMARY HERO: ONE-CLICK DELAY SWITCH (Elgato / Restream dominance) -->
+    <div id="delay-hero" class="hero-panel">
+      <div class="hero-top">
+        <span class="section-micro">DELAY EN VIVO</span>
+        <span id="hero-hint" class="hero-sub">Sin retraso · tiempo real</span>
+      </div>
+
+      <!-- Giant 1-click button when Live / Idle -->
+      <button type="button" id="btn-enable-delay" class="hero-cta" disabled>
+        <span class="hero-cta-main">Activar Delay · <span id="cta-secs">30</span> s</span>
+        <span class="hero-cta-sub">Muestra tu imagen mientras carga · 0 frames perdidos</span>
+      </button>
+
+      <!-- Clean 2-choice return when Delayed / Slating / Catching up -->
+      <div id="disable-group" class="return-grid" hidden>
+        <button type="button" id="btn-jump-live" class="return-tile return-fast" disabled>
+          <strong>Volver ya</strong>
+          <span>Salta al directo (≤2 s)</span>
+        </button>
+        <button type="button" id="btn-catchup-live" class="return-tile return-lossless" disabled>
+          <strong>Sin perder nada</strong>
+          <span id="catchup-rate-label">Ponte al día a 1.25×</span>
+        </button>
+      </div>
+
+      <!-- Duration Segmented Bar (usedropshot style) -->
+      <div class="duration-strip" role="group" aria-label="Elegir segundos de delay">
+        <button type="button" class="dur-pill" data-live-delay="15">15s</button>
+        <button type="button" class="dur-pill active" data-live-delay="30">30s</button>
+        <button type="button" class="dur-pill" data-live-delay="60">60s</button>
+        <button type="button" class="dur-pill" data-live-delay="90">90s</button>
+        <button type="button" class="dur-pill" data-live-delay="120">120s</button>
+        <input id="live-delay-input" class="dur-custom" type="number" min="1" max="120" step="1" value="30" aria-label="Segundos personalizados">
+        <button type="button" id="btn-adjust-delay" class="dur-apply" hidden>Aplicar</button>
+      </div>
+    </div>
+
+    <!-- SECONDARY TACTILE PADS (Elgato 2-col squircle tiles) -->
+    <div class="pad-grid">
+      <button type="button" id="btn-panic" class="pad pad-panic" disabled>
+        <span class="pad-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        </span>
+        <strong id="panic-title">Ocultar directo</strong>
+        <span id="panic-sub">Muestra tu imagen ya</span>
+      </button>
+
+      <div class="pad pad-purge">
+        <div class="pad-purge-top">
+          <span class="pad-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+            </svg>
+          </span>
+          <div>
+            <strong>Borrar leak</strong>
+            <span>Elimina del buffer</span>
+          </div>
+        </div>
+        <div class="purge-pills" role="group" aria-label="Borrar últimos segundos">
+          <button type="button" class="purge-pill" data-purge="15" disabled>-15s</button>
+          <button type="button" class="purge-pill" data-purge="30" disabled>-30s</button>
+          <button type="button" class="purge-pill" data-purge="all" disabled>Todo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUICK OBS CONNECT CARD (only shown when disconnected / waiting for OBS) -->
+    <div id="obs-quick-tip" class="quick-connect">
+      <div class="quick-connect-head">
+        <span class="section-micro">CONEXIÓN RÁPIDA EN OBS</span>
+        <span class="quick-hint">Ajustes → Emisión → Personalizado</span>
+      </div>
+      <div class="quick-copy-grid">
+        <div class="quick-copy-item">
+          <div><span class="micro-lbl">Servidor</span><code id="obs-server">rtmp://127.0.0.1:1935/live</code></div>
+          <span class="copy">
+            <button type="button" class="copy-button" command="--copy" commandfor="obs-server" aria-label="Copiar servidor OBS">Copiar</button>
+            <span class="copy-tip" role="status"></span>
+          </span>
+        </div>
+        <div class="quick-copy-item">
+          <div><span class="micro-lbl">Clave</span><code id="obs-key">input</code></div>
+          <span class="copy">
+            <button type="button" class="copy-button" command="--copy" commandfor="obs-key" aria-label="Copiar clave OBS">Copiar</button>
+            <span class="copy-tip" role="status"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM CONNECTION BAR (Meld / Restream single-bar footer) -->
+    <footer class="deck-footer">
+      <button type="button" id="btn-dest-pill" class="dest-chip" title="Cambiar destino o Stream Key">
+        <span class="dest-dot" aria-hidden="true"></span>
+        <span id="dest-label">Local</span>
+      </button>
+
+      <div class="footer-right">
+        <span id="buffer-mini" class="mono-mini" title="Contenido retenido en memoria">0.0s · 0 MB</span>
+        <button type="button" id="btn-quick-start" class="btn-go">Iniciar</button>
+        <button type="button" id="btn-stop" class="btn-stop" hidden>Detener</button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- SUBTLE HELPER STRIP BELOW DECK (desktop only, hidden in ?dock=1) -->
+  <div class="below-deck desktop-only">
+    <button type="button" id="btn-shortcut-slate" class="ghost-pill">
+      <span id="slate-chip-text">Imagen de espera: Automática</span>
+    </button>
+    <button type="button" id="btn-shortcut-hotkeys" class="ghost-pill">
+      <span id="hk-chip-text">Atajos: Off</span>
+    </button>
+    <span class="copy">
+      <button type="button" class="ghost-pill copy-button" command="--copy" commandfor="obs-dock-url" aria-label="Copiar URL del Dock para OBS">Copiar URL Dock OBS</button>
+      <span class="copy-tip" role="status"></span>
+    </span>
+    <code id="obs-dock-url" class="sr-only">http://127.0.0.1:8765/?dock=1</code>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL DRAWER (Progressive disclosure: config, slate, hotkeys, diagnostics) -->
+<dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title" closedby="any">
+  <div class="dialog-head">
+    <h1 id="settings-title">Ajustes de Offset</h1>
+    <form method="dialog"><button value="close" class="icon-btn" aria-label="Cerrar ajustes">✕</button></form>
+  </div>
+
+  <div class="seg-tabs" role="tablist" aria-label="Categorías de ajustes">
+    <button type="button" role="tab" class="seg-tab active" data-tab="dest" aria-selected="true">Destino</button>
+    <button type="button" role="tab" class="seg-tab" data-tab="slate" aria-selected="false">Imagen</button>
+    <button type="button" role="tab" class="seg-tab" data-tab="hotkeys" aria-selected="false">Atajos</button>
+    <button type="button" role="tab" class="seg-tab" data-tab="diag" aria-selected="false">Estado</button>
+  </div>
+
+  <!-- TAB 1: DESTINO -->
+  <div class="tab-pane" data-pane="dest">
+    <fieldset id="config-fields">
+      <span class="section-micro">¿A DÓNDE TRANSMITES?</span>
+      <div class="preset-grid" role="tablist" aria-label="Plataforma">
+        <button type="button" role="tab" class="preset-card active" data-preset="local" aria-selected="true">Local</button>
+        <button type="button" role="tab" class="preset-card" data-preset="twitch" aria-selected="false">Twitch</button>
+        <button type="button" role="tab" class="preset-card" data-preset="youtube" aria-selected="false">YouTube</button>
+        <button type="button" role="tab" class="preset-card" data-preset="kick" aria-selected="false">Kick</button>
+        <button type="button" role="tab" class="preset-card" data-preset="custom" aria-selected="false">Otro</button>
+      </div>
+
+      <div id="key-field-wrap" class="field" hidden>
+        <label for="stream-key">Stream Key <span id="preset-key-hint">Oculta</span></label>
+        <div class="secret-row">
+          <input id="stream-key" type="password" autocomplete="off" spellcheck="false" placeholder="Pega tu clave de emisión">
+          <button type="button" id="toggle-key-vis" class="btn-subtle">Ver</button>
+        </div>
+        <label class="check-row">
+          <input id="remember-key" type="checkbox" checked>
+          <span>Recordar clave cifrada en Windows (no volver a pegarla)</span>
+        </label>
+        <p id="preset-help" class="hint"></p>
+      </div>
+
+      <div id="url-field-wrap" class="field">
+        <label for="output-url">URL de destino</label>
+        <input id="output-url" type="text" value="rtmp://127.0.0.1:1936/live/offset" spellcheck="false">
+        <p class="hint">Para pruebas locales con FFmpeg o MediaMTX en el puerto 1936.</p>
+      </div>
+
+      <label class="check-row check-spaced">
+        <input id="auto-reconnect" type="checkbox" checked>
+        <span>Proteger el directo si OBS se cierra o cae (reconexión automática con imagen)</span>
+      </label>
+
+      <details class="adv-details">
+        <summary>Opciones avanzadas (opcional)</summary>
+        <div class="row-two">
+          <div class="field">
+            <label for="start-delay">Al iniciar sesión</label>
+            <select id="start-delay">
+              <option value="0" selected>Empezar en directo (0 s)</option>
+              <option value="15">Empezar con 15 s</option>
+              <option value="30">Empezar con 30 s</option>
+              <option value="60">Empezar con 60 s</option>
+              <option value="120">Empezar con 120 s</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="catchup-speed">Velocidad «Sin perder nada»</label>
+            <select id="catchup-speed">
+              <option value="1.15">1.15× (suave)</option>
+              <option value="1.25" selected>1.25× (equilibrado)</option>
+              <option value="1.40">1.40× (rápido)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="memory">Memoria máxima del buffer</label>
+          <select id="memory">
+            <option value="64">64 MiB</option>
+            <option value="128" selected>128 MiB (recomendado)</option>
+            <option value="256">256 MiB (1080p60 · 120 s)</option>
+            <option value="512">512 MiB</option>
+          </select>
+          <p id="estimate" class="hint"></p>
+        </div>
+      </details>
+    </fieldset>
+
+    <div class="obs-dock-box">
+      <span class="section-micro">PONER OFFSET DENTRO DE OBS</span>
+      <p class="hint">En OBS → <strong>Paneles → Paneles de navegador personalizados</strong>, pega esta dirección:</p>
+      <div class="quick-copy-item">
+        <code id="obs-dock-url-visible">http://127.0.0.1:8765/?dock=1</code>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="obs-dock-url-visible" aria-label="Copiar URL del panel OBS">Copiar</button>
+          <span class="copy-tip" role="status"></span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: IMAGEN DE ESPERA -->
+  <div class="tab-pane" data-pane="slate" hidden>
+    <p class="hint">Esta imagen aparece en bucle mientras se carga el delay o cuando pulsas <strong>Ocultar directo</strong>. Se adapta sola a tu resolución y FPS de OBS.</p>
+    <div id="slate-dropzone" class="slate-dropzone">
+      <img id="slate-preview-img" class="slate-preview-img" alt="Vista previa de tu imagen de espera" hidden>
+      <div id="slate-empty" class="slate-empty">
+        <strong>Arrastra una imagen aquí</strong>
+        <span>PNG, JPG o WebP · o usa la pantalla oscura automática</span>
+      </div>
+    </div>
+    <div class="slate-actions">
+      <label class="btn-go file-btn">
+        Elegir imagen
+        <input id="slate-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+      </label>
+      <button type="button" id="btn-slate-reset" class="btn-subtle" hidden>Quitar imagen</button>
+    </div>
+    <p id="slate-meta" class="hint"></p>
+  </div>
+
+  <!-- TAB 3: ATAJOS GLOBALES -->
+  <div class="tab-pane" data-pane="hotkeys" hidden>
+    <div class="hk-top">
+      <div>
+        <strong>Atajos dentro del juego (Windows)</strong>
+        <p class="hint">Controla Offset sin hacer Alt+Tab.</p>
+      </div>
+      <label class="switch-toggle">
+        <input id="hotkeys-enabled" type="checkbox">
+        <span>Activos</span>
+      </label>
+    </div>
+    <div class="hotkey-list">
+      <div class="hotkey-row">
+        <label for="hk-toggle">Activar / Quitar Delay</label>
+        <input id="hk-toggle" type="text" value="Ctrl+Shift+F9" spellcheck="false">
+        <span id="hk-toggle-st" class="hk-st">Off</span>
+      </div>
+      <div class="hotkey-row">
+        <label for="hk-jump">Volver ya (Directo)</label>
+        <input id="hk-jump" type="text" value="Ctrl+Shift+F10" spellcheck="false">
+        <span id="hk-jump-st" class="hk-st">Off</span>
+      </div>
+      <div class="hotkey-row">
+        <label for="hk-catchup">Sin perder nada</label>
+        <input id="hk-catchup" type="text" value="Ctrl+Shift+F11" spellcheck="false">
+        <span id="hk-catchup-st" class="hk-st">Off</span>
+      </div>
+      <div class="hotkey-row">
+        <label for="hk-panic">Ocultar directo (Pánico)</label>
+        <input id="hk-panic" type="text" value="Ctrl+Shift+F12" spellcheck="false">
+        <span id="hk-panic-st" class="hk-st">Off</span>
+      </div>
+    </div>
+    <div class="hk-footer">
+      <button type="button" id="btn-save-hotkeys" class="btn-go">Guardar atajos</button>
+      <span id="hk-msg" class="hint" role="status"></span>
+    </div>
+  </div>
+
+  <!-- TAB 4: ESTADO Y DIAGNÓSTICO -->
+  <div class="tab-pane" data-pane="diag" hidden>
+    <dl class="diag-list">
+      <div><dt>Destino activo</dt><dd id="dest-masked">rtmp://127.0.0.1:1936/live/offset</dd></div>
+      <div><dt>Señal OBS</dt><dd id="stream-info">—</dd></div>
+      <div><dt>RAM motor + FFmpeg</dt><dd id="rss">—</dd></div>
+      <div><dt>Buffer en RAM</dt><dd id="bytes">0.0 / 128.0 MiB</dd></div>
+      <div><dt>Paquetes (in / out / slate)</dt><dd id="packets">0 / 0 / 0</dd></div>
+      <div><dt>Reconexiones OBS / Red</dt><dd id="reconn-count">0 / 0</dd></div>
+    </dl>
+    <div class="diag-actions">
+      <button type="button" id="export" class="btn-subtle">Descargar diagnóstico JSON</button>
+    </div>
+    <ul id="events" class="event-log"><li>Aún no hay actividad.</li></ul>
+  </div>
+</dialog>
+
+<!-- NATIVE STOP CONFIRMATION MODAL (modern-web-guidance dialog pattern) -->
+<dialog id="stop-dialog" class="confirm-dialog" aria-labelledby="stop-dialog-title" closedby="any">
+  <h1 id="stop-dialog-title">¿Detener el directo?</h1>
+  <p>Se desconectará la salida y se descartará lo que siga pendiente en el buffer.</p>
+  <form method="dialog" class="dialog-actions">
+    <button value="cancel" class="btn-subtle" autofocus>Seguir transmitiendo</button>
+    <button value="stop" class="btn-danger-solid">Detener ahora</button>
+  </form>
+</dialog>
+</body>
+</html>
