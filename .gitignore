@@ -4,4 +4,5 @@ offset-demo-*.flv
 data/
 dist/
 build/
+.build-venv/
 *.spec

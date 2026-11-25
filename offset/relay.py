@@ -266,8 +266,9 @@ class Relay:
         with self.lifecycle_lock:
             if self.stop_event.is_set():
                 raise RuntimeError("La sesión ya se está cerrando.")
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, bufsize=0)
+                                    stderr=subprocess.PIPE, bufsize=0, creationflags=flags)
             setattr(self, attribute, proc)
             thread = threading.Thread(target=self._stderr, args=(proc,), daemon=True)
             thread.start(); self.threads.append(thread)

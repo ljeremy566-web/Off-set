@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 import json
 import math
+import os
 from pathlib import Path
 import statistics
 import subprocess
@@ -171,12 +172,13 @@ def probe_stream_format(avc_header, aac_header, first_idr, sample_rate, channels
                        + aac_header.with_timestamp(0).encode()
                        + first_idr.with_timestamp(0).encode())
                 sample.write_bytes(raw)
+                flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
                 proc = subprocess.run(
                     [ffprobe, "-v", "error", "-select_streams", "v:0",
                      "-show_entries",
                      "stream=width,height,profile,level,r_frame_rate,color_space,color_primaries,color_transfer,color_range",
                      "-of", "json", str(sample)],
-                    capture_output=True, timeout=5,
+                    capture_output=True, timeout=5, creationflags=flags,
                 )
                 if proc.returncode == 0:
                     data = json.loads(proc.stdout.decode("utf-8", errors="replace"))
@@ -280,7 +282,8 @@ def compile_slate(fmt, image_path=None, ffmpeg="ffmpeg", duration_s=2):
             "-flvflags", "no_duration_filesize",
             "-f", "flv", str(out_flv),
         ]
-        proc = subprocess.run(cmd, capture_output=True, timeout=20)
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        proc = subprocess.run(cmd, capture_output=True, timeout=20, creationflags=flags)
         if proc.returncode != 0:
             raise RuntimeError("No se pudo generar el slate compatible con FFmpeg: "
                                + proc.stderr.decode("utf-8", errors="replace")[-300:])

@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--ffmpeg", default="ffmpeg")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--open", action="store_true", default=frozen, help="Abre el panel automáticamente.")
+    parser.add_argument("--no-open", action="store_true", help="No abrir navegador al iniciar.")
     parser.add_argument("--tray", action="store_true", default=(frozen and os.name == "nt"),
                         help="Ejecuta con icono en la bandeja del sistema de Windows.")
     parser.add_argument("--console", action="store_true", help="Desactiva el modo bandeja y usa consola.")
@@ -73,7 +74,7 @@ def main():
             print(f"Dock para OBS: {url}/?dock=1", flush=True)
             print("Configura tu destino o inicia directo con OBS.", flush=True)
 
-        if args.open:
+        if args.open and not args.no_open:
             webbrowser.open(url)
 
         if use_tray:
